@@ -4,10 +4,11 @@ import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import com.github.ciao12793.csvutil.annotation.CSV;
+import com.github.ciao12793.csvutil.exception.CSVUtilException;
 import com.github.ciao12793.csvutil.util.ReflectionUtil;
 
 /**
@@ -51,18 +52,14 @@ public class CSVReader {
 	 * @param clazz
 	 *            mapping class
 	 * @return
-	 * @throws ReflectiveOperationException
-	 * @throws IOException
 	 */
-	public <T> List<T> read(Class<T> clazz) throws ReflectiveOperationException, IOException {
-		List<T> list = new ArrayList<>();
-
-		for (String line : Files.readAllLines(path)) {
-			String[] columns = line.split(delimiter, -1);
-			list.add(mapping(clazz, columns));
+	public <T> List<T> read(Class<T> clazz) {
+		try {
+			return Files.readAllLines(path).stream().map(s -> mapping(clazz, s.split(delimiter, -1)))
+					.collect(Collectors.toList());
+		} catch (IOException e) {
+			throw new CSVUtilException(e);
 		}
-
-		return list;
 	}
 
 	/**
@@ -73,19 +70,23 @@ public class CSVReader {
 	 * @param columns
 	 *            a csv row
 	 * @return
-	 * @throws ReflectiveOperationException
 	 */
-	private <T> T mapping(Class<T> clazz, String[] columns) throws ReflectiveOperationException {
-		T bean = ReflectionUtil.getBean(clazz);
+	private <T> T mapping(Class<T> clazz, String[] columns) {
+		T bean;
+		try {
+			bean = ReflectionUtil.getBean(clazz);
 
-		for (Field field : clazz.getDeclaredFields()) {
-			CSV annotation = field.getAnnotation(CSV.class);
-			if (annotation != null) {
-				String value = columns[annotation.index()];
-				ReflectionUtil.set(bean, field, value);
+			for (Field field : clazz.getDeclaredFields()) {
+				CSV annotation = field.getAnnotation(CSV.class);
+				if (annotation != null) {
+					String value = columns[annotation.index()];
+					ReflectionUtil.set(bean, field, value);
+				}
 			}
-		}
 
-		return bean;
+			return bean;
+		} catch (ReflectiveOperationException e) {
+			throw new CSVUtilException(e);
+		}
 	}
 }
